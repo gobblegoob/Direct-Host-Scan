@@ -1,0 +1,30 @@
+{
+  "searchName": "Direct Host Scan",
+  "startDateTime": "",
+  "endDateTime": "",
+  "recordLimit": 2000,
+  "subject": {
+    "orientation": "SERVER",
+    "ipAddresses": {
+      "includes": [],
+      "excludes": []
+    },
+    "hostGroups": {
+      "includes": [],
+      "excludes": []
+    }
+  },
+  "peer": {
+    "ipAddresses": {
+      "includes": [],
+      "excludes": []
+    },
+    "hostGroups": {
+      "includes": ["Outside Hosts"],
+      "excludes": []
+    },
+    "tcpUdpPorts": {
+      "includes": ["443/tcp"]
+    }
+  }
+}
