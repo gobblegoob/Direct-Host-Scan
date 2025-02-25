@@ -32,7 +32,7 @@
     <img src="images/logo.png" alt="Logo" height="80">
   </a>
 
-  <h3 align="center">SNA Autometron</h3>
+  <h3 align="center">SNA Direct Host Scan</h3>
 
   <p align="center">
     Identify Peer IP addresses and Add to the Hostgroup of Your Choice!
@@ -76,7 +76,10 @@
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
-Use this to look up Outside Host IP addresses and look for domain data.  That data will allow you to drop those identified IP addresses into your chosen host groups.  
+Use this to look up Outside Host IP addresses from  and look for domain data.  That data will allow you to drop those identified IP addresses into your chosen host groups.  
+This will perform a Flow Query to identify unknown outside hosts.  It will then connect to the hosts and use certificate information to classify these IP's into hostgroups.
+
+Since for some services - IP's can change frequently. There is also a Hostgroup Cleanup script which can attempt to connect to identified IPs and validate that they are still current.  If not - they will be removed from the hostgroup.
 
 
 <p align="right">(<a href="#top">back to top</a>)</p>
@@ -88,11 +91,9 @@ Use this to look up Outside Host IP addresses and look for domain data.  That da
 * [Python](https://python.org/)
 
 #### APIs Used
-* [Shodan API Reference](https://developer.shodan.io/api)
 * [Cisco Secure Network Analytics API Reference](https://developer.cisco.com/docs/stealthwatch/enterprise/)
 
 <p align="right">(<a href="#top">back to top</a>)</p>
-
 
 
 <!-- GETTING STARTED -->
@@ -120,7 +121,6 @@ This is an example of how to list things you need to use the software and how to
    ```sh
    pip install -r requirements.txt
    ```
-3. Obtain an API key for Shodan.  This can be done by creating a free account at https://www.shodan.io
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
@@ -128,76 +128,49 @@ This is an example of how to list things you need to use the software and how to
 <!-- USAGE EXAMPLES -->
 ## Usage
 
-### ScanToUPdate.py
+Some internet based applications can have highly dynamic public IP addresses.  In order to accurately monitor the activity on these applications - keeping up-to-date and accurate host groups is necessary.
 
-Use this to scan for a single domain to update a single host tag.  Allows you to make a more specific Flow Query to keep the number of Shodan api lookups down.<br><br>
-Usage: ScanToUpdate.py [-h] [-d DOMAIN] [-t TAG] [-c CERTSTRING] [-rx]
+### DirectHostScan.py
+This script will perform lookups against identified domains and certificate search strings to identify and categorize IP's you connect to in your organization.  
 
-<table>
-  <tr>
-    <td width = 300><b>Arguments</b></td><td width=500><b>Description</b></td>
-  </tr>
-  <tr><td>-h, --help</td><td>show this help message and exit</td></tr>
-  <tr><td>-d DOMAIN, --domain DOMAIN</td><td>Domain you wish to search for</td></tr>
-  <tr><td>-t TAG, --tag TAG</td><td>What tag or hostrgroup to you wish to update for the given domain</td></tr>
-  <tr><td>-c CERTSTRING, --certstring CERTSTRING</td><td>Enter a regex match string for cert CN and SAN fields</td></tr>
-  <tr><td>-rx, --reportxlsx</td><td>Output unknown domains to an excel file</td></tr>
-</table>
+To prepare the application, you need to configure the following
+1. Identify your hostgroups, domains, and search strings if necessary
+2. Create a Flow query that is optimized for the outside hosts you want to identify.  Exclude all previously identified outside hosts.  Exclude any internal hosts as well if necessary.
+3. Configure the sna.json file wiht your credentials, SMC FQDN/IP and search criteria.
+4. Configure the search_data dictionary in DirectHostScan.py to contain your hostgroups, URLs, and necessary search strings if URLs aren't specific enough.  Note, search strings are regex.
 
-### MultiScan.py
-Use this to search many domains and update many host groups.  Will require a more generalized flow query so there may be more Shodan queries resulting in longer run time.<br><br>
-Usage: MultiScan.py [-h] [-l] [-rx] [-t TIME] [-ld]
-
-<table>
-  <tr>
-    <td width = 300><b>Arguments</b></td><td width=500><b>Description</b></td>
-  </tr>
-  <tr><td>-h, --help</td><td>show this help message and exit</td></tr>
-  <tr><td>-l, --log</td><td>Add output to a log file (Not yet functional</td></tr>
-  <tr><td>-rx, --reportxlsx</td><td>Output unknown domains to an excel file</td></tr>
-  <tr><td>-t TIME, --time TIME</td><td>Flow report time in minutes.  Default is 1440 (24 hours)</td></tr>
-  <tr><td>-ld, --listdomains</td><td>List domains to scan</td></tr>
-</table>
-
-You must esignate your domains, cert strings, and destination hostgroups in MultiScan.py by editing the MY_DATA dictionary.  The dictionary is formatted as below
-```
-MY_DATA = {
-    'domain1.com': {
-        'certstr': 'Cert CN or SAN Regex',
-        'destinationtag': 'Name of Hostgroup'
-    },
-    'domain2.com': {
-        'certstr': 'Cert CN or SAN regex',
-        'destinationtag': 'Name of another Hostgroup'
-    }
-}
-...
-```
 
 ### Setup
 The application will perform the following tasks:
 1. Execute a Flow Query on SNA per the query parameters you apply in the sna.json file
-2. With the results from the flow query, it will query shodan for domain or certificate CN and SAN field data to try and identify a public IP
-3. Will then take the IP's that correspond to your target domains and insert them into your designated Host Group/Tag
+2. Configure your hostgroup and domain searches.  This is done by updating the search_data dictionary in DirectHostScan.py.  You can query as many domains as necessary.
+```
+    search_data = {
+        'My Hostgroup 1': {
+            'url': 'somedomain.com',
+            'search_string': '(somedomian\.com)|(service\.devices)'
+        },
+        'My Hostgroup 2': {
+            'url': 'otherdomain.com',
+            'search_string': ''
+        },
+        ...etc...
+    }
+```
+3. With the results from the flow query, each external host connection on port 443 will be queried for its certificate data. (CN and SAN fields)
+4. Will then take the IP's that correspond to your target domains and insert them into your designated Host Group/Tag
 
-<p>Before you set up the script - you need to design a Flow Query to identify the target peer IP addresses you want to query Shodan for.  The results of this query will be looked up in Shodan where domain and certificates CN/SANs will be checked to see if they match your targeted domain.  Design and hone your Flow Query in the SNA Flow Query screen.  Once you have designed your query - you can easily transfer the query parameters to the sna.json file.  </p>
+<p>Before you set up the script - you need to design a Flow Query to identify the target peer IP addresses you want to query.  The results of this query will be looked up where domain and certificates CN/SANs will be checked to see if they match your targeted domain.  Design and hone your Flow Query in the SNA Flow Query screen.  Once you have designed your query - you can easily transfer the query parameters to the sna.json file.  </p>
 
 <p> ** Example query: ** </p> 
 <img src="images/flowsearch.PNG" alt="Example Flow Query">
 
 ### To set up:
- - Add your API key to shodan.json
  - Add the following data to sna.json
  <li>SMC hostname/IP and credentials
  <li>Source/Subject Hostgroups to include and exclude from your query
  <li>Destination/Peer hostgroups to include and exclude from your query
  
- ### Optional:
- You can add values for the following global variables to make it easier to run the application.  These variables are kept in [FILE]
- 1. <br>MY_DOMAIN</br> - This is the domain you want to search
- 2. <br>MY_TAG_TO_UPDATE</br> - This is the destination host group - all IP's that match your search criteria will be automatically added to this host group
- 3. <br>CERT_STR - Sometimes a domain won't be listed in Shodan - this is a regex string you can add to match part of the CN or SAN fields in a site certificate as captured by Shodan.
-
 ### Scheduling:
 The best way to run this is to run cronjobs calling the scripts wiht the accompanying arguments.  This allows you to run the script against several domains and populate several different host groups without making any changes to code.  You can schedule a cron job in linux to execute the script. To run the script at 11pm each day and output a log file for tracking, add the folloiwng to your crontab file:
 ```
