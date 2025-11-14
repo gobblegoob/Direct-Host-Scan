@@ -143,21 +143,54 @@ def parse_data(url_dict):
     return
 
 
+# Adding new excel_report
 def excel_report(data):
     '''
-    Print a report of a series of hosts to an outlook file for review
-    :arg: dict
-    :return: boolean
+    Print a report of a series of hosts to an excel file for review.
+    Filters the DataFrame based on global 'search_data' before creating the report.
+    :arg data: dict - A dictionary that can be converted into a Pandas DataFrame.
+    :return: boolean - True if the report was created successfully, False otherwise.
     '''
     try:
         today = datetime.today()
         filename = f'{str(today.year)}_{str(today.month)}_{str(today.day)}_DirectHostScan Unknown Report.xlsx'
         df = pd.DataFrame.from_dict(data)
-        #print(df.to_string())
+
+        # --- Step 1: Collect patterns to remove from search_data ---
+        patterns_to_remove = []
+        for item_value in search_data.values():
+            if 'url' in item_value and item_value['url']:
+                patterns_to_remove.append(item_value['url'])
+            if 'search_string' in item_value and item_value['search_string']:
+                patterns_to_remove.append(item_value['search_string'])
+
+        # Remove duplicates and ensure no empty strings are used as patterns
+        patterns_to_remove = list(set(patterns_to_remove))
+
+        # --- Step 2: Filter the DataFrame if patterns exist ---
+        if patterns_to_remove:
+            # Escape special regex characters in the patterns to prevent errors
+            # and combine them into a single regex pattern using '|' (OR)
+            escaped_patterns = [re.escape(p) for p in patterns_to_remove]
+            regex_pattern = '|'.join(escaped_patterns)
+
+            # Create boolean masks for rows that contain any of the patterns
+            # .astype(str) ensures all column entries are strings for .str.contains()
+            # case=False makes the search case-insensitive
+            # na=False treats NaN/None values as not containing the pattern
+            mask_cn = df['host_cn'].astype(str).str.contains(regex_pattern, case=False, na=False)
+            mask_san = df['host_san'].astype(str).str.contains(regex_pattern, case=False, na=False)
+
+            # Combine masks: a row should be removed if it matches in EITHER host_cn OR host_san
+            # Then, select rows where this combined mask is FALSE (i.e., rows to keep)
+            df = df[~(mask_cn | mask_san)]
+
+        # --- Step 3: Create the Excel report from the cleaned DataFrame ---
         df.to_excel(filename, index=False, freeze_panes=(1,0))
-        return
+        return True
     except Exception as e:
         print(f'Error creating log file. {e}')
+        return False
 
 if __name__ == '__main__':
     # Hostgroups and search strings. Add as many as necessary.
@@ -172,6 +205,7 @@ if __name__ == '__main__':
     
     '''
     ### ADD YOUR HOST GROUPS AND SEARCH DATA HERE ####
+    
     search_data = {
         'MY HOST GROUP': {
             'url': 'url.com',
